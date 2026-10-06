@@ -441,7 +441,11 @@ class BaleClient extends EventEmitter {
     const res = Proto.decodeSendMessageResponse(resBytes);
     return {
       rid,
-      date: res.date,
+      // Server timestamp in milliseconds; surfaced as a plain number so callers
+      // can do date arithmetic without tripping over BigInt.
+      date: Number(res.date),
+      // Server-assigned counter (see decodeSendMessageResponse).
+      messageId: Number(res.messageId),
       peer: peerObj,
       text
     };
