@@ -1061,18 +1061,46 @@ class BaleClient extends EventEmitter {
   }
 
   /**
-   * Search saved contacts.
+   * Search users by name / username. Works for both saved contacts and
+   * public usernames (e.g. `some_username`); returns `{ users, userPeers, groups, groupPeers }`.
    * @param {string} query
    */
   async searchContacts(query) {
     const payload = Proto.encodeSearchContacts(query);
     const resBytes = await this.connection.sendRequest('bale.users.v1.Users', 'SearchContacts', payload);
-    return Proto.decodeBySchema(resBytes, {
-      fields: [
-        { tag: 1, name: 'users', type: 'message', isRepeated: true },
-        { tag: 2, name: 'userPeers', type: 'message', isRepeated: true }
-      ]
-    });
+    return Proto.decodeSearchContactsResponse(resBytes);
+  }
+
+  /**
+   * Resolve a peer target to a `{ type, id }` pair.
+   *
+   * Accepts either a numeric peer/user id (returned as-is) or a public
+   * username such as `some_username` / `@some_username`, which is resolved through
+   * `bale.users.v1.Users/SearchContacts`.
+   *
+   * @param {number|string} target numeric id or public username
+   * @returns {Promise<{ type: number, id: number }>}
+   */
+  async resolvePeer(target) {
+    const raw = String(target).trim().replace(/^@/, '');
+    if (!raw) throw new Error('resolvePeer: empty target');
+    if (/^\d+$/.test(raw)) {
+      const id = Number(raw);
+      return { type: ExPeerType.PRIVATE, id };
+    }
+
+    const res = await this.searchContacts(raw);
+    const userPeers = (res && res.userPeers) || [];
+    const groupPeers = (res && res.groupPeers) || [];
+    const found = userPeers.find(p => p && p.userId) || groupPeers.find(p => p && p.userId) || null;
+    if (!found) {
+      throw new Error(`resolvePeer: no user or group found for "${raw}"`);
+    }
+    return {
+      type: ExPeerType.PRIVATE,
+      id: Number(found.userId),
+      accessHash: BigInt(found.accessHash || 0n)
+    };
   }
 
   // ==========================================

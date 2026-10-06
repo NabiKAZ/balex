@@ -1123,6 +1123,41 @@ const Proto = {
     return w.finish();
   },
 
+  /**
+   * `UserPeer { user_id = 1, access_hash = 2 }`
+   * NOTE: this is NOT the same layout as `ExPeer { type = 1, id = 2 }`.
+   * Several responses (SearchContacts, ImportContacts, GetContacts) carry
+   * UserPeer, so decoding them with `decodePeer` silently swaps id and hash.
+   */
+  decodeUserPeer(buf) {
+    const r = new ProtoReader(buf);
+    const p = { userId: 0, accessHash: 0n };
+    while (r.hasMore()) {
+      const { fieldNumber, wireType } = r.readTag();
+      if (fieldNumber === 1) p.userId = Number(r.readVarint());
+      else if (fieldNumber === 2) p.accessHash = r.readVarint();
+      else r.skip(wireType);
+    }
+    return p;
+  },
+
+  decodeSearchContactsResponse(buf) {
+    const out = { users: [], userPeers: [], groups: [], groupPeers: [] };
+    if (!buf || buf.length === 0) return out;
+    const r = new ProtoReader(buf);
+    while (r.hasMore()) {
+      const { fieldNumber, wireType } = r.readTag();
+      if (wireType !== WIRE_BYTES) { r.skip(wireType); continue; }
+      const len = Number(r.readVarint());
+      const sub = r.readBytes(len);
+      if (fieldNumber === 1) out.users.push(Proto.decodeUser(sub));
+      else if (fieldNumber === 2) out.userPeers.push(Proto.decodeUserPeer(sub));
+      else if (fieldNumber === 4) out.groups.push(sub);
+      else if (fieldNumber === 5) out.groupPeers.push(Proto.decodeUserPeer(sub));
+    }
+    return out;
+  },
+
   encodeEditName(name) {
     const w = new ProtoWriter();
     w.writeString(1, String(name));
