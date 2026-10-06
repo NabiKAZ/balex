@@ -321,7 +321,7 @@ const Proto = {
   encodeHandshakeRequest(req = {}) {
     const w = new ProtoWriter();
     w.writeInt32(1, req.mkprotoVersion || 1);
-    w.writeInt64(2, req.apiVersion || 171248);
+    w.writeInt64(2, req.apiVersion || 173855);
     return w.finish();
   },
 
