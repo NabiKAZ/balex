@@ -38,7 +38,10 @@ class BaleClient extends EventEmitter {
       apiVersion: 173855,
       session: null,
       autoReconnect: true,
-      stealth: true
+      stealth: true,
+      // Shown as the session device name in Bale's active-devices list.
+      // Change it to whatever your own deployment should look like.
+      deviceTitle: 'BaleX'
     }, options);
 
     // Human-like stealth configuration
@@ -289,11 +292,31 @@ class BaleClient extends EventEmitter {
 
   /**
    * Request an SMS verification code for a phone number.
+   *
+   * The `deviceTitle` sent here is what Bale displays in the account's
+   * active-devices list. It is captured ONCE, at `sendCode()` time, and
+   * stays fixed for every later login on this `deviceHash` — changing it
+   * afterwards has no effect until a fresh `deviceHash` is used.
+   *
    * @param {string} phoneNumber - e.g. "+989123456789"
+   * @param {object} [options]
+   * @param {string} [options.deviceTitle] - Override the device name.
+   *   Defaults to `this.options.deviceTitle` (itself defaulting to 'BaleX').
+   * @returns {Promise<{ transactionHash: string, [k: string]: any }>}
+   * @throws {Error} Propagates gRPC/HTTP failures from the gateway.
    */
-  async sendCode(phoneNumber) {
+  async sendCode(phoneNumber, options = {}) {
+    // An explicit per-call title wins; otherwise fall back to the
+    // constructor-configured one. Empty string is treated as "not set"
+    // so a stray `''` cannot silently blank the device name on the wire.
+    let deviceTitle = options.deviceTitle;
+    if (deviceTitle === undefined || deviceTitle === null || deviceTitle === '') {
+      deviceTitle = this.options.deviceTitle || 'BaleX';
+    }
+
     const payload = Proto.encodeStartPhoneAuth({
       phoneNumber,
+      deviceTitle,
       deviceHash: this.session.deviceHash
     });
 
